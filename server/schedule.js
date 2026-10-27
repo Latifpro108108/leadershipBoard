@@ -33,5 +33,5 @@ export function status(date = new Date()) {
   const c = clock(date);
   const workday = !['Sat', 'Sun'].includes(c.weekday);
   const locked = workday && LOCKIN.some(([a, b]) => c.minutes >= a && c.minutes < b);
-  return { day: c.day, workday, locked, minutes: c.minutes, tz: TZ };
+  return { day: c.day, workday, locked, minutes: c.minutes, blocks: LOCKIN, tz: TZ };
 }
