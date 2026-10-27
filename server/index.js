@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { status } from './schedule.js';
 
 const PEOPLE = ['latif', 'precious'];
@@ -42,6 +44,10 @@ app.delete('/api/events/:id', async (req, res) => {
   await Event.findByIdAndDelete(req.params.id);
   res.status(204).end();
 });
+
+const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '../client/dist');
+app.use(express.static(dist));
+app.get('*', (req, res) => res.sendFile(path.join(dist, 'index.html')));
 
 await mongoose.connect(process.env.MONGODB_URI);
 app.listen(process.env.PORT || 4000, () => console.log('api ready'));

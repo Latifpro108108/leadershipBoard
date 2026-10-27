@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node server/index.js",
+    "build": "vite build client",
     "server": "node --watch server/index.js",
     "client": "vite client",
     "dev": "concurrently -n api,web \"npm run server\" \"npm run client\""
