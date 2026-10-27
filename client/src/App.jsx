@@ -244,7 +244,7 @@ export default function App() {
 
       <section className="cols">
         {PEOPLE.map((p, i) => {
-          const today = events.filter((e) => e.person === p.id && e.day === status.day);
+          const recent = events.filter((e) => e.person === p.id).slice(-8).reverse();
           const s = stats[i];
           return (
             <article key={p.id}>
@@ -279,19 +279,23 @@ export default function App() {
                 {!status.locked && <small>Logging opens during lock-in only</small>}
               </div>
 
-              {today.length > 0 && (
-                <ul className="log">
-                  {today.map((e) => (
-                    <li key={e._id}>
-                      <span>
-                        {new Date(e.at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}
-                        {' · '}
-                        {e.type.replace('_', ' ')} <b>{e.points}</b>
-                      </span>
-                      <button onClick={() => undo(e._id)}>undo</button>
-                    </li>
-                  ))}
-                </ul>
+              {recent.length > 0 && (
+                <>
+                  <h3>Recent</h3>
+                  <ul className="log">
+                    {recent.map((e) => (
+                      <li key={e._id}>
+                        <span>
+                          {e.day.slice(5)}{' '}
+                          {new Date(e.at).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}
+                          {' · '}
+                          {e.type.replace('_', ' ')} <b>{e.points}</b>
+                        </span>
+                        <button onClick={() => undo(e._id)}>undo</button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
             </article>
           );
