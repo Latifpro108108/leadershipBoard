@@ -22,9 +22,9 @@ const app = express();
 app.use(express.json());
 
 app.get('/api/board', async (req, res) => {
-  const month = String(req.query.month || status().day.slice(0, 7));
-  if (!/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: 'bad month' });
-  const events = await Event.find({ day: new RegExp(`^${month}-`) }).sort({ at: 1 });
+  const year = String(req.query.year || status().day.slice(0, 4));
+  if (!/^\d{4}$/.test(year)) return res.status(400).json({ error: 'bad year' });
+  const events = await Event.find({ day: new RegExp(`^${year}-`) }).sort({ at: 1 });
   res.json({ events, status: status() });
 });
 

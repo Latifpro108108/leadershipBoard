@@ -20,7 +20,7 @@ const LEVELS = [
   { min: 0, color: '#ef4444', label: '<20' },
 ];
 
-const WEEK = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAY_START = 9 * 60;
 const DAY_END = 17 * 60;
 
@@ -39,14 +39,20 @@ function monthLabel(month) {
   return new Date(y, m - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' });
 }
 
-function monthDays(month) {
-  const [y, m] = month.split('-').map(Number);
-  const count = new Date(y, m, 0).getDate();
-  return Array.from({ length: count }, (_, i) => ({
-    n: i + 1,
-    key: `${month}-${pad(i + 1)}`,
-    weekday: new Date(y, m - 1, i + 1).getDay(),
-  }));
+function yearDays(year) {
+  const first = new Date(year, 0, 1);
+  const offset = (first.getDay() + 6) % 7;
+  const count = new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
+  return Array.from({ length: count }, (_, i) => {
+    const date = new Date(year, 0, 1 + i);
+    return {
+      key: `${year}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      month: date.getMonth() + 1,
+      weekday: date.getDay(),
+      col: Math.floor((offset + i) / 7),
+      row: (offset + i) % 7,
+    };
+  });
 }
 
 function nextChange(status) {
@@ -67,18 +73,59 @@ function Timeline({ status }) {
       <div className="bar">
         {status.blocks.map(([a, b]) => (
           <div key={a} className="block" style={{ left: `${pct(a)}%`, width: `${pct(b) - pct(a)}%` }}>
-            {hhmm(a)}–{hhmm(b)}
+            <span>{hhmm(a)}–{hhmm(b)}</span>
           </div>
         ))}
         {inDay && <div className="now" style={{ left: `${pct(now)}%` }} />}
       </div>
-      <div className="ticks">
-        <span>09:00</span>
-        <span>12:00</span>
-        <span>13:00</span>
-        <span>15:10</span>
-        <span>16:10</span>
-        <span>17:00</span>
+    </div>
+  );
+}
+
+function Heatmap({ days, month, status, scoreOf }) {
+  const labelCols = {};
+  days.forEach((d) => {
+    if (!labelCols[d.month]) labelCols[d.month] = d.col;
+  });
+  const counted = (d) => d.weekday !== 0 && d.weekday !== 6 && d.key <= status.day;
+  const [, selMonth] = month.split('-').map(Number);
+
+  return (
+    <div className="heat-scroll">
+      <div className="heat">
+        {Object.entries(labelCols).map(([m, col]) => (
+          <span
+            key={m}
+            className={`mlabel ${Number(m) === selMonth ? 'sel' : ''}`}
+            style={{ gridColumn: col + 2, gridRow: 1 }}
+          >
+            {MONTHS[m - 1]}
+          </span>
+        ))}
+        {['Mon', 'Wed', 'Fri'].map((w, i) => (
+          <span key={w} className="wlabel" style={{ gridColumn: 1, gridRow: 2 + i * 2 }}>
+            {w}
+          </span>
+        ))}
+        {days.map((d) => {
+          const show = counted(d);
+          const score = scoreOf(d.key);
+          const weekend = d.weekday === 0 || d.weekday === 6;
+          return (
+            <div
+              key={d.key}
+              className={`cell ${weekend ? 'wk' : ''} ${d.key === status.day ? 'today' : ''} ${
+                d.month === selMonth ? '' : 'dim'
+              }`}
+              style={{
+                gridColumn: d.col + 2,
+                gridRow: d.row + 2,
+                ...(show ? { background: scoreColor(score) } : {}),
+              }}
+              title={show ? `${d.key} · ${score} pts` : d.key}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -88,17 +135,18 @@ export default function App() {
   const [month, setMonth] = useState(null);
   const [board, setBoard] = useState(null);
   const [error, setError] = useState('');
+  const year = month ? month.slice(0, 4) : null;
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/board${month ? `?month=${month}` : ''}`);
+      const res = await fetch(`/api/board${year ? `?year=${year}` : ''}`);
       const data = await res.json();
       setBoard(data);
       setMonth((m) => m || data.status.day.slice(0, 7));
     } catch {
       setError('Cannot reach server');
     }
-  }, [month]);
+  }, [year]);
 
   useEffect(() => {
     load();
@@ -125,10 +173,11 @@ export default function App() {
   if (!board || !month) return <p className="boot">{error || 'Loading…'}</p>;
 
   const { status, events } = board;
-  const days = monthDays(month);
-  const isWorkday = (d) => d.weekday !== 0 && d.weekday !== 6;
-  const counted = (d) => isWorkday(d) && d.key <= status.day;
-  const countedDays = days.filter(counted);
+  const days = yearDays(Number(year));
+  const monthDaysList = days.filter((d) => d.key.startsWith(month));
+  const countedDays = monthDaysList.filter(
+    (d) => d.weekday !== 0 && d.weekday !== 6 && d.key <= status.day,
+  );
 
   const dayScore = (person, key) => {
     const lost = events
@@ -138,7 +187,7 @@ export default function App() {
   };
 
   const stats = PEOPLE.map((p) => {
-    const mine = events.filter((e) => e.person === p.id);
+    const mine = events.filter((e) => e.person === p.id && e.day.startsWith(month));
     const total = countedDays.reduce((sum, d) => sum + dayScore(p.id, d.key), 0);
     return {
       total,
@@ -185,9 +234,7 @@ export default function App() {
       <section className="versus">
         <div className="versus-top">
           <span>{PEOPLE[0].name} {stats[0].total}</span>
-          <strong>
-            {payer ? `${payer} is paying at this rate` : 'All level'}
-          </strong>
+          <strong>{payer ? `${payer} is paying at this rate` : 'All level'}</strong>
           <span>{stats[1].total} {PEOPLE[1].name}</span>
         </div>
         <div className="split">
@@ -203,43 +250,25 @@ export default function App() {
             <article key={p.id}>
               <div className="head">
                 <h2>{p.name}</h2>
-                <span className="today-score">
-                  today <b>{dayScore(p.id, status.day)}</b>
+                <span>
+                  today <b className="big">{dayScore(p.id, status.day)}</b>
                 </span>
               </div>
 
               <div className="stats">
                 <div><b>{s.total}</b><span>month pts</span></div>
                 <div><b>{s.avg}</b><span>daily avg</span></div>
-                <div><b>{s.perfect}</b><span>perfect days</span></div>
+                <div><b>{s.perfect}</b><span>perfect</span></div>
                 <div><b>{s.talks}</b><span>talks</span></div>
                 <div><b>{s.phones}</b><span>phone</span></div>
               </div>
 
-              <div className="grid">
-                {WEEK.map((w, k) => (
-                  <em key={k}>{w}</em>
-                ))}
-                {Array.from({ length: (days[0].weekday + 6) % 7 }).map((_, k) => (
-                  <i key={`pad${k}`} />
-                ))}
-                {days.map((d) => {
-                  const show = counted(d);
-                  const score = dayScore(p.id, d.key);
-                  return (
-                    <div
-                      key={d.key}
-                      className={`box ${d.key === status.day ? 'today' : ''} ${
-                        !isWorkday(d) ? 'off' : ''
-                      }`}
-                      style={show ? { background: scoreColor(score) } : undefined}
-                      title={show ? `${d.key} · ${score} pts` : d.key}
-                    >
-                      {d.n}
-                    </div>
-                  );
-                })}
-              </div>
+              <Heatmap
+                days={days}
+                month={month}
+                status={status}
+                scoreOf={(key) => dayScore(p.id, key)}
+              />
 
               <div className="actions">
                 {ACTIONS.map((a) => (
@@ -275,7 +304,7 @@ export default function App() {
           <i key={l.min} style={{ background: l.color }} title={l.label} />
         ))}
         <span>More</span>
-        <small>Weekends are dashed and not scored. Lowest total pays at month end.</small>
+        <small>Weekends are not scored. Lowest total pays at month end.</small>
       </footer>
 
       {error && <p className="error">{error}</p>}
