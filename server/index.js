@@ -23,6 +23,8 @@ const Event = mongoose.model(
 const app = express();
 app.use(express.json());
 
+app.get('/api/health', (req, res) => res.send('ok'));
+
 app.get('/api/board', async (req, res) => {
   const year = String(req.query.year || status().day.slice(0, 4));
   if (!/^\d{4}$/.test(year)) return res.status(400).json({ error: 'bad year' });
